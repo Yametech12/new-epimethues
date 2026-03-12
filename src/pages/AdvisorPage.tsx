@@ -45,9 +45,6 @@ export default function AdvisorPage() {
 
     setIsSpeaking(messageId);
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error("API key is missing. Please add your Gemini API key to the Settings menu before publishing.");
-      }
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
@@ -109,9 +106,6 @@ export default function AdvisorPage() {
     setIsLoading(true);
 
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error("API key is missing. Please add your Gemini API key to the Settings menu before publishing.");
-      }
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const model = "gemini-3.1-pro-preview";
       
