@@ -254,6 +254,9 @@ export default function CalibrationPage() {
     setShowPracticeResult(false);
     setSelectedType('');
     try {
+      if (!process.env.GEMINI_API_KEY) {
+        throw new Error("API key is missing. Please add your Gemini API key to the Settings menu before publishing.");
+      }
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const model = "gemini-3-flash-preview";
       const response = await ai.models.generateContent({
@@ -305,6 +308,9 @@ export default function CalibrationPage() {
     `;
 
     try {
+      if (!process.env.GEMINI_API_KEY) {
+        throw new Error("API key is missing. Please add your Gemini API key to the Settings menu before publishing.");
+      }
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       
       const systemInstruction = `You are the EPIMETHEUS Oracle, a master of female psychology and behavioral profiling. Your task is to analyze social scenarios using the EPIMETHEUS system by Yame Coaching.
@@ -419,7 +425,11 @@ export default function CalibrationPage() {
       }
       
     } catch (err) {
-      setError('The Oracle is currently unavailable. Please check your API key or try again later.');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('The Oracle is currently unavailable. Please check your API key or try again later.');
+      }
       console.error(err);
     } finally {
       setIsLoading(false);
