@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (matches request.auth.uid)
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - displayName: string (optional) - User's full name
+    //   - email: string (required, email format) - User's email address
+    //   - photoURL: string (optional, url format) - Profile picture URL
+    //   - createdAt: timestamp (optional) - Account creation time
+    //
+    // Collection: calibrations
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required) - UID of the owner
+    //   - typeId: string (required, 3 chars) - EPIMETHEUS type ID
+    //   - answers: map (optional) - Quiz answers
+    //   - timestamp: timestamp (required) - Creation time
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^data:image/.*"));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (('email' in request.auth.token && request.auth.token.email.lower() == "mohammadsidique.ibrahim@gmail.com") ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'createdAt']) &&
+             (!('uid' in data) || data.uid == request.auth.uid) &&
+             (!('email' in data) || data.email == null || isValidEmail(data.email)) &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && (data.photoURL.matches("^https://.*") || data.photoURL.matches("^http://.*") || data.photoURL.matches("^data:image/.*")) && data.photoURL.size() < 1048576));
+    }
+
+    function isValidCalibration(data) {
+      return hasOnlyAllowedFields(['userId', 'typeId', 'answers', 'timestamp']) &&
+             (!('userId' in data) || data.userId == request.auth.uid) &&
+             (!('typeId' in data) || (data.typeId is string && data.typeId.size() == 3)) &&
+             (!('timestamp' in data) || data.timestamp is timestamp);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) && 
+                      (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid);
+    }
+
+    match /calibrations/{calibrationId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidCalibration(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /feedback/{feedbackId} {
+      allow create: if true; // Allow anyone to submit feedback
+      allow read: if isAdmin(); // Only admins can read feedback
+      allow update, delete: if isAdmin(); // Only admins can manage feedback
+    }
+
+    match /oracle_analyses/{analysisId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+    }
+  }
+}
